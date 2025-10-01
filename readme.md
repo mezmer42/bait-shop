@@ -6,7 +6,12 @@ the builder.ps1 script generate a valid pdf file that contains obfuscated vbscri
 
 This kind of phising technique has been used by several threat actors in the past few years, and recent EDRs should easily detect it. It is still a funny and instructive exemple of how certains file formats can be abused to hide malicious payloads.
 
-## Usage
+![Execution flow](assets/lnk-phishing.drawio.png)
+
+## ref
+
+- https://www.proofpoint.com/us/blog/threat-insight/call-it-what-you-want-threat-actor-delivers-highly-targeted-multistage-polyglot
+- https://arxiv.org/html/2407.01529v1
 
 ## TODO
 
