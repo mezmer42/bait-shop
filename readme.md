@@ -10,7 +10,7 @@ This kind of phising technique has been used by several threat actors in the pas
 
 1. The lnk file execute the HTA contained in the PDF with `forfiles.exe` and `mshta.exe`.
 2. the obfuscated vbscript executes `conhost.exe` to silently run a PowerShell script.
-3. the powershell script decompress, decypher and execute the final payload (calc.exe by default)
+3. the powershell script decypher, decompress and execute the final payload (calc.exe by default)
 
 ![Execution flow](assets/lnk-phishing.drawio.png)
 
